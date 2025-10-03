@@ -3,4 +3,5 @@ matplotlib
 numpy
 pandas
 stream_zip
+pydantic
 

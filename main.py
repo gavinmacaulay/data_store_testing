@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, Query, Path as fPath
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel, Field
 import matplotlib.pyplot as plt
 import numpy as np
 import io
@@ -29,6 +30,19 @@ searchable_attrs = ['dataset_id', 'species', 'imaging_method', 'model_type',
                     'anatomical_category', 'shape_method', 'aphiaID']
 searchable_data = [{key: d[key] for key in searchable_attrs if key in d} for d in all_datasets]
 df = pd.DataFrame(searchable_data).set_index('dataset_id')
+
+# For the v2 API, make a dataframe with one row per specimen and the columns containing 
+# all dataset and specimen metadata, excluding the shapes.
+rows = []
+for d in all_datasets:
+    for s in d['specimens']:
+        row = {'id': d['dataset_id'] + '_' + s['specimen_id']} | d | s
+        # Remove unneeded columns in the flattened version
+        for r in ['specimens', 'shapes', 'shape_types']:
+            row.pop(r)
+        rows.append(row)
+
+df_flat = pd.DataFrame(rows).fillna('')
 
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
 
@@ -138,6 +152,76 @@ async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The d
             img = plot_specimen(s[0], dataset_id=ds[0]['dataset_id'], stream=True)
             return Response(img, media_type="image/png")
 
+#============================================================================
+# An alternative way to access the specimens, without using datasets
+# These are all under the /v2 path
+
+class SpecimenQuery_v2(BaseModel):
+    species: str | None = Field(None, title='Species',
+                                description="The scientific species name")
+    imaging_method: str | None = Field(None, title='Imaging method',
+                                      description="The imaging method used")
+    specimen_condition: str | None = Field(None, title='Specimen condition',
+                                          description="The specimen condition")                                      
+    model_type: str | None = Field(None, title='Model type',
+                                  description="The model type used")
+    shape_type: str | None = Field(None, title='Shape type',
+                                  description="The shape type used")
+    anatomical_category: str | None = Field(None, title='Anatomical category',
+                                           description="The anatomical category")
+    shape_method: str | None = Field(None, title='Shape method',
+                                    description="The shape method")
+    aphiaID: int | None = Field(None, title='AphiaID',
+                               description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
+
+@app.get("/v2/specimens",
+         summary="Get specimen metadata with optional filtering. Does not return shapes.",
+         response_description='A list of specimen metadata',
+         tags=['get'])
+async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
+        # Return all specimens if no query parameters are given
+        if not query.model_fields_set:
+            return df_flat.to_dict(orient='records')
+
+        # Buuld a DataFrame query string from the query parameters
+        # attr is a tuple of (query_parameter, value)
+        q = [f"{attr[0]} == '{attr[1]}'" for attr in query if attr[1] is not None]
+
+        return df_flat.query(' & '.join(q)).to_dict(orient='records')
+
+
+@app.get("/v2/specimen/{id}/shape",
+         summary='Get specimen shape with the given id',
+         response_description='A specimen shape structured as per the echoSMs data '
+                              f'store [schema]({schema_url})',
+         tags=['get'])
+async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specimen ID')]):
+
+    s = get_sp_from_id(id)
+    if not s:
+        return {"message": "Specimen not found"}
+
+    return s[0]['shapes']
+
+
+@app.get("/v2/specimen/{id}/image",
+         summary='Get an image of the specimen shape with the given id',
+         response_description='An image of the specimen shape',
+         tags=['get'],
+         response_class=Response,
+         responses={200: {'content': {'image/png': {}}}})
+async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):
+
+    s = get_sp_from_id(id)
+    if not s:
+        return {"message": "Specimen not found"}
+
+    img = plot_specimen(s[0], title=id, stream=True)
+    return Response(img, media_type="image/png")
+
+
+#============================================================================
+# Helper functions
 
 def get_ds(dataset_id):
     """Find datasets with given dataset_id."""
@@ -148,8 +232,21 @@ def get_sp(ds, specimen_id):
     """Find specimen with given specimen_id in the given dataset."""
     return [s for s in ds['specimens'] if s['specimen_id'] == specimen_id]
 
+def get_sp_from_id(id):
+    """Find specimen with given id in the flattened dataframe."""
+    s = df_flat.query(f"id == '{id}'")
 
-def plot_specimen(specimen, dataset_id='', stream=False):
+    if s.empty:
+        return None
+
+    ds = get_ds(s['dataset_id'].iloc[0])
+
+    if not ds:
+        return None
+
+    return get_sp(ds[0], s['specimen_id'].iloc[0])
+
+def plot_specimen(specimen, dataset_id='', title='', stream=False):
     """Plot the specimen shape."""
     match specimen['shape_type']:
         case 'outline':
@@ -167,7 +264,8 @@ def plot_specimen(specimen, dataset_id='', stream=False):
             fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
             plot_shape_voxels(specimen['shapes'], axs)
 
-    fig.suptitle(dataset_id + ' ' + specimen['specimen_id'])
+    t = title if title else dataset_id + ' ' + specimen['specimen_id']
+    fig.suptitle(t)
 
     if stream:
         with io.BytesIO() as buffer:
