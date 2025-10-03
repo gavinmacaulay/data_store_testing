@@ -47,14 +47,15 @@ df_flat = pd.DataFrame(rows).fillna('')
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
 
 app = FastAPI(title='The echoSMs web API',
-              openapi_tags=[{'name': 'get',
-                             'description': 'Calls that get information from the data store'},])
-
+              openapi_tags=[{'name': 'v1',
+                             'description': 'Provides data via a dataset/specimen structure'},
+                            {'name': 'v2',
+                             'description': 'Provides data via a flat specimen structure'},])
 
 @app.get("/v1/datasets",
          summary="Get dataset_ids with optional filtering",
          response_description='A list of dataset_ids',
-         tags=['get'])
+         tags=['v1'])
 async def get_datasets(species: Annotated[str | None, Query(  # noqa
                            title='Species',
                            description="The scientific species name")] = None,
@@ -89,7 +90,7 @@ async def get_datasets(species: Annotated[str | None, Query(  # noqa
          summary='Get the dataset with the given dataset_id',
          response_description='A dataset structured as per the echoSMs data store '
                               f'[schema]({schema_url})',
-         tags=['get'])
+         tags=['v1'])
 async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
                       full_data: Annotated[bool, Query(description='If true, all raw data for the '
                                     'dataset will be returned as a zipped file')] = False):
@@ -111,7 +112,7 @@ async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset 
 @app.get("/v1/specimens/{dataset_id}",
          summary='Get the specimen_ids from the dataset with the given dataset_id',
          response_description='A list of specimen_ids',
-         tags=['get'])
+         tags=['v1'])
 async def get_specimens(dataset_id: Annotated[str, fPath(description='The dataset ID')]): # noqa
 
     ds = get_ds(dataset_id)
@@ -125,7 +126,7 @@ async def get_specimens(dataset_id: Annotated[str, fPath(description='The datase
          summary='Get specimen data with the given dataset_id and specimen_id',
          response_description='A specimen dataset structured as per the echoSMs data '
                               f'store [schema]({schema_url})',
-         tags=['get'])
+         tags=['v1'])
 async def get_specimen(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
                        specimen_id: Annotated[str, fPath(description='The specimen ID')]):
 
@@ -139,7 +140,7 @@ async def get_specimen(dataset_id: Annotated[str, fPath(description='The dataset
 @app.get("/v1/specimen_image/{dataset_id}/{specimen_id}",
          summary='Get an image of the specimen shape, with the given dataset_id and specimen_id',
          response_description='An image of the specimen shape',
-         tags=['get'],
+         tags=['v1'],
          response_class=Response,
          responses={200: {'content': {'image/png': {}}}})
 async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
@@ -197,7 +198,7 @@ class SpecimenQuery_v2(BaseModel):
 @app.get("/v2/specimens",
          summary="Get specimen metadata with optional filtering. Does not return shapes.",
          response_description='A list of specimen metadata',
-         tags=['get'])
+         tags=['v2'])
 async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
         # Return all specimens if no query parameters are given
         if not query.model_fields_set:
@@ -214,7 +215,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
          summary='Get specimen shape with the given id',
          response_description='A specimen shape structured as per the echoSMs data '
                               f'store [schema]({schema_url})',
-         tags=['get'])
+         tags=['v2'])
 async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specimen ID')]):
 
     s = get_sp_from_id(id)
@@ -227,7 +228,7 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
 @app.get("/v2/specimen/{id}/image",
          summary='Get an image of the specimen shape with the given id',
          response_description='An image of the specimen shape',
-         tags=['get'],
+         tags=['v2'],
          response_class=Response,
          responses={200: {'content': {'image/png': {}}}})
 async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):
