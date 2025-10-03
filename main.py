@@ -157,41 +157,30 @@ async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The d
 # An alternative way to access the specimens, without using datasets
 # These are all under the /v2 path
 
+# /v2/specimens endpoint query parameter definitions via a Pydantic model
 class SpecimenQuery_v2(BaseModel):
-    species: str | None = Field(None, title='Species',
-                                description="The scientific species name")
-    dataset_id: str | None = Field(None, title='Dataset ID',
-                                   description="The dataset ID")
-    length_type: str | None = Field(None, title='Length type',
-                                   description="The length type")
+    species: str | None = Field(None, title='Species', description="The scientific species name")
+    dataset_id: str | None = Field(None, title='Dataset ID', description="The dataset ID")
+    length_type: str | None = Field(None, title='Length type', description="The length type")
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                            description="The anatomical category")
-    family: str | None = Field(None, title='Family',
-                              description="The scientific family name")                                           
-    genus: str | None = Field(None, title='Genus',
-                              description="The scientific genus name")
-    verncaular_name: str | None = Field(None, title='Vernacular name',
-                                       description="The common name")
-    activity_name: str | None = Field(None, title='Activity name',
-                                     description="The activity name")
+    family: str | None = Field(None, title='Family', description="The scientific family name")                                           
+    genus: str | None = Field(None, title='Genus', description="The scientific genus name")
+    verncaular_name: str | None = Field(None, title='Vernacular name', description="The common name")
+    activity_name: str | None = Field(None, title='Activity name', description="The activity name")
     sound_speed_method: str | None = Field(None, title='Sound speed method',
                                           description="The sound speed method")
     mass_density_method: str | None = Field(None, title='Mass density method',
                                            description="The mass density method")
-    sex: str | None = Field(None, title='Sex of the organism',
-                                    description='The sex of the organism')
-    imaging_method: str | None = Field(None, title='Imaging method',
-                                      description="The imaging method used")
+    sex: str | None = Field(None, title='Sex of the organism', description='The sex of the organism')
+    imaging_method: str | None = Field(None, title='Imaging method', description="The imaging method used")
     specimen_condition: str | None = Field(None, title='Specimen condition',
-                                          description="The specimen condition")                                      
-    model_type: str | None = Field(None, title='Model type',
-                                  description="The model type used")
-    shape_type: str | None = Field(None, title='Shape type',
-                                  description="The shape type used")
+                                            description="The specimen condition")                                      
+    model_type: str | None = Field(None, title='Model type', description="The model type used")
+    shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                            description="The anatomical category")
-    shape_method: str | None = Field(None, title='Shape method',
-                                    description="The shape method")
+    shape_method: str | None = Field(None, title='Shape method', description="The shape method")
     aphiaID: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
