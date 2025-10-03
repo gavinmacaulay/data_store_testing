@@ -159,6 +159,26 @@ async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The d
 class SpecimenQuery_v2(BaseModel):
     species: str | None = Field(None, title='Species',
                                 description="The scientific species name")
+    dataset_id: str | None = Field(None, title='Dataset ID',
+                                   description="The dataset ID")
+    length_type: str | None = Field(None, title='Length type',
+                                   description="The length type")
+    anatomical_category: str | None = Field(None, title='Anatomical category',
+                                           description="The anatomical category")
+    family: str | None = Field(None, title='Family',
+                              description="The scientific family name")                                           
+    genus: str | None = Field(None, title='Genus',
+                              description="The scientific genus name")
+    verncaular_name: str | None = Field(None, title='Vernacular name',
+                                       description="The common name")
+    activity_name: str | None = Field(None, title='Activity name',
+                                     description="The activity name")
+    sound_speed_method: str | None = Field(None, title='Sound speed method',
+                                          description="The sound speed method")
+    mass_density_method: str | None = Field(None, title='Mass density method',
+                                           description="The mass density method")
+    sex: str | None = Field(None, title='Sex of the organism',
+                                    description='The sex of the organism')
     imaging_method: str | None = Field(None, title='Imaging method',
                                       description="The imaging method used")
     specimen_condition: str | None = Field(None, title='Specimen condition',
