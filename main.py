@@ -234,6 +234,18 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
     return Response(img, media_type="image/png")
 
 
+@app.get("/v2/last-updated",
+         summary='Date of most recent datastore contents update',
+         response_description='The date when the datastore contents were last updated',
+         tags=['v2'])
+async def last_updated():
+
+    # Using the most recent date from the datasets might not work that well - it relies
+    # on that field in the datasets being updated. Consider maintaining a separate
+    # last updated time, independent of individual datasets.
+    return max(df_flat.date_last_modified)
+
+
 #============================================================================
 # Helper functions
 
