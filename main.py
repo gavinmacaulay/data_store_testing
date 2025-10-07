@@ -42,7 +42,11 @@ for d in all_datasets:
             row.pop(r)
         rows.append(row)
 
-df_flat = pd.DataFrame(rows).fillna('')
+# Replace nan with None - done like this because .fillna(None) doesn't work.
+# None is needed because fastAPI won't serialise np.nan into JSON and the alternative
+# of converting to '' causes problems with using the data later on (one gets
+# columns with a mixture of numbers and text).
+df_flat = pd.DataFrame(rows).fillna(np.nan).replace([np.nan], [None])
 
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
 
@@ -272,7 +276,25 @@ def plot_specimen(specimen, dataset_id='', title='', stream=False):
             plt.tight_layout()
         case 'voxels':
             fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
-            plot_shape_voxels(specimen['shapes'], axs)
+            axs[0].text(0.5, 0.5, 'Voxel plots are not yet implemented', 
+                        horizontalalignment='center',
+                        transform=axs[0].transAxes)
+            # plot_shape_voxels(specimen['shapes'], axs)
+            axs[0].text(0, 1.05, 'Dorsal', transform=axs[0].transAxes)
+            axs[1].text(0, 1.05, 'Lateral', transform=axs[1].transAxes)
+            fig.supxlabel('[mm]')
+            fig.supylabel('[mm]')
+        case 'categorised_voxels':
+            fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
+            # plot_shape_categorised_voxels(specimen['shapes'], axs)
+            axs[0].text(0.5, 0.5, 'Categorised voxel plots are not yet implemented', 
+                        horizontalalignment='center',
+                        transform=axs[0].transAxes)
+            axs[0].text(0, 1.05, 'Dorsal', transform=axs[0].transAxes)
+            axs[1].text(0, 1.05, 'Lateral', transform=axs[1].transAxes)
+            fig.supxlabel('[mm]')
+            fig.supylabel('[mm]')
+
 
     t = title if title else dataset_id + ' ' + specimen['specimen_id']
     fig.suptitle(t)
@@ -337,6 +359,32 @@ def plot_shape_surface(shapes, ax):
 
 def plot_shape_voxels(s, axs):
     """Plot the specimen's voxels."""
+    voxel_size = np.array(s['voxel_size'])
+
+    # Work with an impedance proxy for plotting
+    z = np.array(s['sound_speed_compressional']) * np.array(s['mass_density'])
+
+    # Could alternatively plot the sum of the matrix values along one axis instead
+    # of choosing a cutting plane, so would sum along an axis for each view
+
+    # The cutting plane indices
+    x_i = int(np.round(z.shape[0]/2))
+    y_i = int(np.round(z.shape[0]/2))
+
+    # Dorsal view
+    axs[0].imshow(z[:, y_i, :], extent=[0, z.shape[2]*voxel_size[2]*1e3, 
+                                        0, z.shape[0]*voxel_size[0]*1e3])
+
+    # Ventral view
+    axs[1].imshow(z[x_i, :, :], extent=[0, z.shape[1]*voxel_size[1]*1e3, 
+                                        0, z.shape[2]*voxel_size[2]*1e3])
+
+
+
+def plot_shape_categorised_voxels(s, axs):
+    """Plot the specimen's voxels."""
+
+    # could do the same as for plot_shape_voxels or something more fancy.
     pass
 
 
