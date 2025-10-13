@@ -2,6 +2,6 @@ fastapi[standard]
 matplotlib
 numpy
 pandas
-stream_zip
+stream-zip
 pydantic
 
