@@ -3,9 +3,7 @@
 from fastapi import FastAPI, Query, Path as fPath
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
-import matplotlib.pyplot as plt
 import numpy as np
-import io
 from typing import Annotated
 from pathlib import Path
 import json
@@ -13,7 +11,7 @@ import pandas as pd
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
-
+from echosms import plot_specimen
 
 base_dir = Path(r'C:\Users\GavinMacaulay\OneDrive - Aqualyd Limited\Documents\Aqualyd'
                 r'\Projects\2024-05 NOAA modelling\working\anatomical data store')
@@ -154,7 +152,7 @@ async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The d
     if ds:
         s = get_sp(ds[0], specimen_id)
         if s:
-            img = plot_specimen(s[0], dataset_id=ds[0]['dataset_id'], stream=True)
+            img = plot_specimen(s[0], dataset_id=ds[0]['dataset_id'], stream=True, dpi=200)
             return Response(img, media_type="image/png")
 
 #============================================================================
@@ -230,7 +228,7 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
     if not s:
         return {"message": "Specimen not found"}
 
-    img = plot_specimen(s[0], title=id, stream=True)
+    img = plot_specimen(s[0], title=id, stream=True, dpi=200)
     return Response(img, media_type="image/png")
 
 
@@ -271,134 +269,6 @@ def get_sp_from_id(id):
         return None
 
     return get_sp(ds[0], s['specimen_id'].iloc[0])
-
-def plot_specimen(specimen, dataset_id='', title='', stream=False):
-    """Plot the specimen shape."""
-    match specimen['shape_type']:
-        case 'outline':
-            fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
-            plot_shape_outline(specimen['shapes'], axs)
-            axs[0].text(0, 1.05, 'Dorsal', transform=axs[0].transAxes)
-            axs[1].text(0, 1.05, 'Lateral', transform=axs[1].transAxes)
-            fig.supxlabel('[mm]')
-            fig.supylabel('[mm]')
-        case 'surface':
-            fig, ax = plt.subplots(subplot_kw={'projection': '3d'})
-            plot_shape_surface(specimen['shapes'], ax)
-            plt.tight_layout()
-        case 'voxels':
-            fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
-            axs[0].text(0.5, 0.5, 'Voxel plots are not yet implemented', 
-                        horizontalalignment='center',
-                        transform=axs[0].transAxes)
-            # plot_shape_voxels(specimen['shapes'], axs)
-            axs[0].text(0, 1.05, 'Dorsal', transform=axs[0].transAxes)
-            axs[1].text(0, 1.05, 'Lateral', transform=axs[1].transAxes)
-            fig.supxlabel('[mm]')
-            fig.supylabel('[mm]')
-        case 'categorised_voxels':
-            fig, axs = plt.subplots(2, 1, sharex=True, layout='constrained')
-            # plot_shape_categorised_voxels(specimen['shapes'], axs)
-            axs[0].text(0.5, 0.5, 'Categorised voxel plots are not yet implemented', 
-                        horizontalalignment='center',
-                        transform=axs[0].transAxes)
-            axs[0].text(0, 1.05, 'Dorsal', transform=axs[0].transAxes)
-            axs[1].text(0, 1.05, 'Lateral', transform=axs[1].transAxes)
-            fig.supxlabel('[mm]')
-            fig.supylabel('[mm]')
-
-
-    t = title if title else dataset_id + ' ' + specimen['specimen_id']
-    fig.suptitle(t)
-
-    if stream:
-        with io.BytesIO() as buffer:
-            plt.savefig(buffer, format='png')
-            buffer.seek(0)
-            return buffer.getvalue()
-    else:
-        plt.show()
-
-
-def plot_shape_outline(shapes, axs):
-    """Plot the specimen's outline shape."""
-    for s in shapes:
-        c = 'C0' if s['boundary'] == 'fluid' else 'C1'
-        x = np.array(s['x'])*1e3
-        z = np.array(s['z'])*1e3
-        y = np.array(s['y'])*1e3
-        width_2 = np.array(s['width'])*1e3/2
-        zU = (z + np.array(s['height'])*1e3/2)
-        zL = (z - np.array(s['height'])*1e3/2)
-
-        # Dorsal view
-        axs[0].plot(x, y, c='grey', linestyle='--', linewidth=1)  # centreline
-        axs[0].plot(x, y+width_2, c=c)
-        axs[0].plot(x, y-width_2, c=c)
-
-        # Lateral view
-        axs[1].plot(x, z, c='grey', linestyle='--', linewidth=1)  # centreline
-        axs[1].plot(x, zU, c=c)
-        axs[1].plot(x, zL, c=c)
-
-        # close the ends of the shapes
-        for i in [0, -1]:
-            axs[1].plot([x[i], x[i]], [zU[i], zL[i]], c=c)
-            axs[0].plot([x[i], x[i]], [(y+width_2)[i], (y-width_2)[i]], c=c)
-            axs[i].set_aspect('equal')
-            axs[i].xaxis.set_inverted(True)
-
-
-def plot_shape_surface(shapes, ax):
-    """Plot the specimen's 3D triangular shape."""
-    for s in shapes:
-        # c = 'C0' if s['boundary'] == 'fluid' else 'C1'
-        facets = np.array([s['facets_0'], s['facets_1'], s['facets_2']]).transpose()
-        x = 1e3 * np.array(s['x'])
-        y = 1e3 * np.array(s['y'])
-        z = 1e3 * np.array(s['z'])
-
-        ax.plot_trisurf(x, y, z, triangles=facets)
-        ax.view_init(elev=210, azim=-60, roll=0)
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-
-        ax.set_aspect('equal')
-        ax.xaxis.set_inverted(True)
-        ax.yaxis.set_inverted(True)
-
-
-def plot_shape_voxels(s, axs):
-    """Plot the specimen's voxels."""
-    voxel_size = np.array(s['voxel_size'])
-
-    # Work with an impedance proxy for plotting
-    z = np.array(s['sound_speed_compressional']) * np.array(s['mass_density'])
-
-    # Could alternatively plot the sum of the matrix values along one axis instead
-    # of choosing a cutting plane, so would sum along an axis for each view
-
-    # The cutting plane indices
-    x_i = int(np.round(z.shape[0]/2))
-    y_i = int(np.round(z.shape[0]/2))
-
-    # Dorsal view
-    axs[0].imshow(z[:, y_i, :], extent=[0, z.shape[2]*voxel_size[2]*1e3, 
-                                        0, z.shape[0]*voxel_size[0]*1e3])
-
-    # Ventral view
-    axs[1].imshow(z[x_i, :, :], extent=[0, z.shape[1]*voxel_size[1]*1e3, 
-                                        0, z.shape[2]*voxel_size[2]*1e3])
-
-
-
-def plot_shape_categorised_voxels(s, axs):
-    """Plot the specimen's voxels."""
-
-    # could do the same as for plot_shape_voxels or something more fancy.
-    pass
-
 
 def get_dir_items(base_path: Path):
     """Create an iterable of file/directory info for use by stream-zip."""
