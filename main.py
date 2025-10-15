@@ -162,6 +162,7 @@ async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The d
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
 class SpecimenQuery_v2(BaseModel):
     species: str | None = Field(None, title='Species', description="The scientific species name")
+    id: str | None = Field(None, title='Specimen ID', description="The specimen ID")
     dataset_id: str | None = Field(None, title='Dataset ID', description="The dataset ID")
     length_type: str | None = Field(None, title='Length type', description="The length type")
     anatomical_category: str | None = Field(None, title='Anatomical category',
@@ -200,6 +201,19 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
         q = [f"{attr[0]} == '{attr[1]}'" for attr in query if attr[1] is not None]
 
         return df_flat.query(' & '.join(q)).to_dict(orient='records')
+
+
+# @app.get("/v2/specimen/{id}/data",
+#          summary='Get specimen data with the given id',
+#          response_description='A specimen dataset (metadata and shape)',
+#          tags=['v2'])
+# async def get_specimen_data_v2(id: Annotated[str, fPath(description='The specimen ID')]):
+
+#     s = get_sp_from_id(id)
+#     if not s:
+#         return {"message": "Specimen not found"}
+
+#     return s[0]['shapes']
 
 
 @app.get("/v2/specimen/{id}/shape",
