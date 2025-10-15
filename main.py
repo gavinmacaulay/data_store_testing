@@ -12,39 +12,38 @@ from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
 from echosms import plot_specimen
-from urllib.request import urlopen, urlretrieve
+from urllib.request import urlretrieve
 from zipfile import ZipFile
 import os
 
-from_url = False
-if os.getenv('HOME') == '/workspace':  # DigitalOcean droplet
-    from_url = True
-
+cdn_url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
+schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
 datastore_filename = 'all-datasets-automatically-generated.json'
+datasets_dir = Path('.')/'datasets'
 
-base_dir = Path(r'C:\Users\GavinMacaulay\OneDrive - Aqualyd Limited\Documents\Aqualyd'
-                r'\Projects\2024-05 NOAA modelling\working\anatomical data store')
-base_dir = Path('.')
-datasets_dir = base_dir/'datasets'
+# If woring on a DigitalOcean droplet, set to download datastore from URL, else
+# expect the data to be available as a local file (in datasets_dir)
+from_url = True if os.getenv('HOME') == '/workspace' else False
 
+# Note. This initialising code gets run twice - this needs to be fixed by using
+# FastAPI lifespan events.
+
+datasets_dir.mkdir(exist_ok=True)
+
+"""Obtain the datastore and prepare in-memory versions."""
 if from_url:
-    url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
-    zipfile = 'all-datasets-automatically-generated.zip'
+    zipfile = Path(datastore_filename).with_suffix('.zip')
 
-    # Download the zipped datastore file on startup
-    urlretrieve(url + zipfile, Path('.')/zipfile)
+    print('Downloading datastore data')
+    urlretrieve(cdn_url + zipfile.name, datasets_dir/zipfile)
 
-    # Unzip it
-    zip_file_path = 'path/to/your/archive.zip'
-    extraction_directory = 'path/to/extract/to' # Optional
+    print('Uncompressing datastore data')
+    with ZipFile(datasets_dir/zipfile, 'r') as zip_object:
+        zip_object.extractall(datasets_dir)
 
-    with ZipFile(zip_file_path, 'r') as zip_object:
-        zip_object.extractall(extraction_directory)
-
-    # Read it into memory
-    print('Reading datastore from URL')
-    f = urlopen('https://echosms-datastore.syd1.digitaloceanspaces.com/' + datastore_filename)
-    all_datasets = json.load(f)
+    print('Reading datastore data into memory')
+    with open(datasets_dir/datastore_filename, 'r') as f:
+        all_datasets = json.load(f)
 else:
     print('Reading datastore from local file')
     with open(datasets_dir/datastore_filename, 'r') as f:
@@ -73,14 +72,16 @@ for d in all_datasets:
 # columns with a mixture of numbers and text).
 df_flat = pd.DataFrame(rows).fillna(np.nan).replace([np.nan], [None])
 
-schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
 
+####################################################################################################
 app = FastAPI(title='The echoSMs web API',
               openapi_tags=[{'name': 'v1',
                              'description': 'Provides data via a dataset/specimen structure'},
                             {'name': 'v2',
                              'description': 'Provides data via a flat specimen structure'},])
 
+
+####################################################################################################
 @app.get("/v1/datasets",
          summary="Get dataset_ids with optional filtering",
          response_description='A list of dataset_ids',
@@ -115,6 +116,7 @@ async def get_datasets(species: Annotated[str | None, Query(  # noqa
     return df.query(q[:-3]).index.tolist()
 
 
+####################################################################################################
 @app.get("/v1/dataset/{dataset_id}",
          summary='Get the dataset with the given dataset_id',
          response_description='A dataset structured as per the echoSMs data store '
@@ -138,6 +140,7 @@ async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset 
     return ds[0]
 
 
+####################################################################################################
 @app.get("/v1/specimens/{dataset_id}",
          summary='Get the specimen_ids from the dataset with the given dataset_id',
          response_description='A list of specimen_ids',
@@ -151,6 +154,7 @@ async def get_specimens(dataset_id: Annotated[str, fPath(description='The datase
     return [s['specimen_id'] for s in ds[0]['specimens']]
 
 
+####################################################################################################
 @app.get("/v1/specimen/{dataset_id}/{specimen_id}",
          summary='Get specimen data with the given dataset_id and specimen_id',
          response_description='A specimen dataset structured as per the echoSMs data '
@@ -166,6 +170,7 @@ async def get_specimen(dataset_id: Annotated[str, fPath(description='The dataset
     return get_sp(ds[0], specimen_id)
 
 
+####################################################################################################
 @app.get("/v1/specimen_image/{dataset_id}/{specimen_id}",
          summary='Get an image of the specimen shape, with the given dataset_id and specimen_id',
          response_description='An image of the specimen shape',
@@ -214,6 +219,8 @@ class SpecimenQuery_v2(BaseModel):
     aphiaID: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
+
+####################################################################################################
 @app.get("/v2/specimens",
          summary="Get specimen metadata with optional filtering. Does not return shapes.",
          response_description='A list of specimen metadata',
@@ -243,6 +250,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
 #     return s[0]['shapes']
 
 
+####################################################################################################
 @app.get("/v2/specimen/{id}/shape",
          summary='Get specimen shape with the given id',
          response_description='A specimen shape structured as per the echoSMs data '
@@ -257,6 +265,7 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
     return s[0]['shapes']
 
 
+####################################################################################################
 @app.get("/v2/specimen/{id}/image",
          summary='Get an image of the specimen shape with the given id',
          response_description='An image of the specimen shape',
@@ -273,6 +282,7 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
     return Response(img, media_type="image/png")
 
 
+####################################################################################################
 @app.get("/v2/last-updated",
          summary='Date of most recent datastore contents update',
          response_description='The date when the datastore contents were last updated',
