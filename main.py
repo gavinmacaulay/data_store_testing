@@ -12,16 +12,43 @@ from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
 from echosms import plot_specimen
+from urllib.request import urlopen, urlretrieve
+from zipfile import ZipFile
+import os
+
+from_url = False
+if os.getenv('HOME') == '/workspace':  # DigitalOcean droplet
+    from_url = True
+
+datastore_filename = 'all-datasets-automatically-generated.json'
 
 base_dir = Path(r'C:\Users\GavinMacaulay\OneDrive - Aqualyd Limited\Documents\Aqualyd'
                 r'\Projects\2024-05 NOAA modelling\working\anatomical data store')
 base_dir = Path('.')
 datasets_dir = base_dir/'datasets'
 
-#datasets_dir = Path('.')/'data_store'/'resources'
+if from_url:
+    url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
+    zipfile = 'all-datasets-automatically-generated.zip'
 
-with open(datasets_dir/'all-datasets-automatically-generated.json', 'r') as f:
+    # Download the zipped datastore file on startup
+    urlretrieve(url + zipfile, Path('.')/zipfile)
+
+    # Unzip it
+    zip_file_path = 'path/to/your/archive.zip'
+    extraction_directory = 'path/to/extract/to' # Optional
+
+    with ZipFile(zip_file_path, 'r') as zip_object:
+        zip_object.extractall(extraction_directory)
+
+    # Read it into memory
+    print('Reading datastore from URL')
+    f = urlopen('https://echosms-datastore.syd1.digitaloceanspaces.com/' + datastore_filename)
     all_datasets = json.load(f)
+else:
+    print('Reading datastore from local file')
+    with open(datasets_dir/datastore_filename, 'r') as f:
+        all_datasets = json.load(f)
 
 # make a Pandas version of the dataset attributes that can be searched through easily
 searchable_attrs = ['dataset_id', 'species', 'imaging_method', 'model_type',
@@ -29,7 +56,7 @@ searchable_attrs = ['dataset_id', 'species', 'imaging_method', 'model_type',
 searchable_data = [{key: d[key] for key in searchable_attrs if key in d} for d in all_datasets]
 df = pd.DataFrame(searchable_data).set_index('dataset_id')
 
-# For the v2 API, make a dataframe with one row per specimen and the columns containing 
+# For the v2 API, make a dataframe with one row per specimen and the columns containing
 # all dataset and specimen metadata, excluding the shapes.
 rows = []
 for d in all_datasets:
@@ -167,7 +194,7 @@ class SpecimenQuery_v2(BaseModel):
     length_type: str | None = Field(None, title='Length type', description="The length type")
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                            description="The anatomical category")
-    family: str | None = Field(None, title='Family', description="The scientific family name")                                           
+    family: str | None = Field(None, title='Family', description="The scientific family name")
     genus: str | None = Field(None, title='Genus', description="The scientific genus name")
     verncaular_name: str | None = Field(None, title='Vernacular name', description="The common name")
     activity_name: str | None = Field(None, title='Activity name', description="The activity name")
@@ -178,7 +205,7 @@ class SpecimenQuery_v2(BaseModel):
     sex: str | None = Field(None, title='Sex of the organism', description='The sex of the organism')
     imaging_method: str | None = Field(None, title='Imaging method', description="The imaging method used")
     specimen_condition: str | None = Field(None, title='Specimen condition',
-                                            description="The specimen condition")                                      
+                                            description="The specimen condition")
     model_type: str | None = Field(None, title='Model type', description="The model type used")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
     anatomical_category: str | None = Field(None, title='Anatomical category',
