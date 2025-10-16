@@ -1,7 +1,7 @@
 """Proof of concept of echoSMs anatomical data store RESTful API using FastAPI."""
 
-from fastapi import FastAPI, Query, Path as fPath
-from fastapi.responses import Response, StreamingResponse
+from fastapi import FastAPI, Query, HTTPException, Path as fPath
+from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel, Field
 import numpy as np
 from typing import Annotated
@@ -10,7 +10,7 @@ import json
 import pandas as pd
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
-from stream_zip import ZIP_64, stream_zip
+from stream_zip import ZIP_64
 from echosms import plot_specimen
 from urllib.request import urlretrieve
 from zipfile import ZipFile
@@ -29,9 +29,7 @@ datasets_dir = zipfile.with_suffix('')
 # expect the data to be available in a local directory
 from_url = True if os.getenv('HOME') == '/workspace' else False
 
-from_url = True
-
-# Note. This initialising code gets run twice - this needs to be fixed by using
+# Note. This initialising code gets run twice sometimes - this needs to be fixed by using
 # FastAPI lifespan events.
 
 """Obtain the datastore and load into memory."""
@@ -122,7 +120,7 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
 
     s = specimen(id)
     if not s:
-        return {"message": "Specimen not found"}
+        raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
 
     return s
 
@@ -138,15 +136,15 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
 
     # Use existing image if there is one
     if (datasets_dir/id).with_suffix('.png').exists():
-        img = 1  # load for streaming via Response
-    else:
-        s = specimen(id)
-        if not s:
-            return {"message": "Specimen not found"}
+        print('Using cached image file')
+        return FileResponse((datasets_dir/id).with_suffix('.png'))
 
-        img = plot_specimen(s, title=id, stream=True, dpi=200)
+    s = specimen(id)
 
-    return Response(img, media_type="image/png")
+    if not s:
+        raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
+
+    return Response(plot_specimen(s, title=id, stream=True, dpi=200), media_type="image/png")
 
 
 ####################################################################################################
@@ -174,7 +172,7 @@ def specimen(sid):
 
     sp = s.to_dict(orient='records')[0]
 
-    # If the shape is not in memory (because it is large), load it
+    # If the shape is not in df (because it is large), load it
     if isinstance(sp['shapes'], str):
         with open(datasets_dir/sp['shapes'], 'r') as f:
             sp['shapes'] = json.load(f)  # this can be slow - move to streaming it?
