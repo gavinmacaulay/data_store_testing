@@ -16,183 +16,58 @@ from urllib.request import urlretrieve
 from zipfile import ZipFile
 import os
 
+
 cdn_url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/schema/data_store_schema/'
-datastore_filename = 'all-datasets-automatically-generated.json'
-datasets_dir = Path('.')/'datasets'
+
+zipfile = Path('echosms_datastore_final.zip')
+metadata_filename = 'metadata_all_autogen.json'
+
+datasets_dir = zipfile.with_suffix('')
 
 # If woring on a DigitalOcean droplet, set to download datastore from URL, else
-# expect the data to be available as a local file (in datasets_dir)
+# expect the data to be available in a local directory
 from_url = True if os.getenv('HOME') == '/workspace' else False
+
+from_url = True
 
 # Note. This initialising code gets run twice - this needs to be fixed by using
 # FastAPI lifespan events.
 
-datasets_dir.mkdir(exist_ok=True)
-
-"""Obtain the datastore and prepare in-memory versions."""
+"""Obtain the datastore and load into memory."""
 if from_url:
-    zipfile = Path(datastore_filename).with_suffix('.zip')
-
     print('Downloading datastore data')
-    urlretrieve(cdn_url + zipfile.name, datasets_dir/zipfile)
+    urlretrieve(cdn_url + str(zipfile), filename=zipfile)
 
     print('Uncompressing datastore data')
-    with ZipFile(datasets_dir/zipfile, 'r') as zip_object:
-        zip_object.extractall(datasets_dir)
+    with ZipFile(zipfile, 'r') as zip_object:
+        zip_object.extractall('.')
 
-    print('Reading datastore data into memory')
-    with open(datasets_dir/datastore_filename, 'r') as f:
-        all_datasets = json.load(f)
-else:
-    print('Reading datastore from local file')
-    with open(datasets_dir/datastore_filename, 'r') as f:
-        all_datasets = json.load(f)
+    zipfile.unlink()
 
-# make a Pandas version of the dataset attributes that can be searched through easily
-searchable_attrs = ['dataset_id', 'species', 'imaging_method', 'model_type',
-                    'anatomical_category', 'shape_method', 'aphiaID']
-searchable_data = [{key: d[key] for key in searchable_attrs if key in d} for d in all_datasets]
-df = pd.DataFrame(searchable_data).set_index('dataset_id')
+print('Loading datastore from local files')
+with open(datasets_dir/metadata_filename, 'r') as f:
+    all_datasets = json.load(f)
 
-# For the v2 API, make a dataframe with one row per specimen and the columns containing
-# all dataset and specimen metadata, excluding the shapes.
-rows = []
-for d in all_datasets:
-    for s in d['specimens']:
-        row = {'id': d['dataset_id'] + '_' + s['specimen_id']} | d | s
-        # Remove unneeded columns in the flattened version
-        for r in ['specimens', 'shapes', 'shape_types']:
-            row.pop(r)
-        rows.append(row)
+####################################################################################################
+# now prepare the data for use via the API
 
 # Replace nan with None - done like this because .fillna(None) doesn't work.
 # None is needed because fastAPI won't serialise np.nan into JSON and the alternative
 # of converting to '' causes problems with using the data later on (one gets
 # columns with a mixture of numbers and text).
-df_flat = pd.DataFrame(rows).fillna(np.nan).replace([np.nan], [None])
+df = pd.DataFrame(all_datasets).fillna(np.nan).replace([np.nan], [None])
 
+del all_datasets
 
 ####################################################################################################
 app = FastAPI(title='The echoSMs web API',
-              openapi_tags=[{'name': 'v1',
-                             'description': 'Provides data via a dataset/specimen structure'},
-                            {'name': 'v2',
+              openapi_tags=[{'name': 'v2',
                              'description': 'Provides data via a flat specimen structure'},])
 
 
-####################################################################################################
-@app.get("/v1/datasets",
-         summary="Get dataset_ids with optional filtering",
-         response_description='A list of dataset_ids',
-         tags=['v1'])
-async def get_datasets(species: Annotated[str | None, Query(  # noqa
-                           title='Species',
-                           description="The scientific species name")] = None,
-                       imaging_method: Annotated[str | None, Query(
-                           title='Imaging method',
-                           description="The imaging method used")] = None,
-                       model_type: Annotated[str | None, Query(
-                           title='Model type',
-                           description="The model type used")] = None,
-                       anatomical_category: Annotated[str | None, Query(
-                           title='Anatomical category',
-                           description="The anatomical category")] = None,
-                       shape_method: Annotated[str | None, Query(
-                           title='Shape method',
-                           description="The shape method")] = None,
-                       aphiaID: Annotated[int | None, Query(
-                           title='AphiaID',
-                           description='The [aphiaID](https://www.marinespecies.org/aphia.php)')]
-                               = None):
-
-    q = ''
-    for attr in searchable_attrs[1:]:  # excludes 'dataset_id'
-        q += '' if eval(attr) is None else f'{attr} == @{attr} & '
-
-    if len(q) == 0:
-        return df.index.tolist()
-
-    return df.query(q[:-3]).index.tolist()
-
-
-####################################################################################################
-@app.get("/v1/dataset/{dataset_id}",
-         summary='Get the dataset with the given dataset_id',
-         response_description='A dataset structured as per the echoSMs data store '
-                              f'[schema]({schema_url})',
-         tags=['v1'])
-async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
-                      full_data: Annotated[bool, Query(description='If true, all raw data for the '
-                                    'dataset will be returned as a zipped file')] = False):
-
-    ds = get_ds(dataset_id)
-    if not ds:
-        return {"message": "Dataset not found"}
-
-    if full_data:
-        return {"message": "Not available on this testing server"}
-        # zip up the dataset and stream out
-        return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_id)),
-                                 media_type='application/zip',
-                                 headers={'Content-Disposition':
-                                          f'attachment; filename={dataset_id}.zip'})
-    return ds[0]
-
-
-####################################################################################################
-@app.get("/v1/specimens/{dataset_id}",
-         summary='Get the specimen_ids from the dataset with the given dataset_id',
-         response_description='A list of specimen_ids',
-         tags=['v1'])
-async def get_specimens(dataset_id: Annotated[str, fPath(description='The dataset ID')]): # noqa
-
-    ds = get_ds(dataset_id)
-    if not ds:
-        return {"message": "Dataset not found"}
-
-    return [s['specimen_id'] for s in ds[0]['specimens']]
-
-
-####################################################################################################
-@app.get("/v1/specimen/{dataset_id}/{specimen_id}",
-         summary='Get specimen data with the given dataset_id and specimen_id',
-         response_description='A specimen dataset structured as per the echoSMs data '
-                              f'store [schema]({schema_url})',
-         tags=['v1'])
-async def get_specimen(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
-                       specimen_id: Annotated[str, fPath(description='The specimen ID')]):
-
-    ds = get_ds(dataset_id)
-    if not ds:
-        return {"message": "Dataset not found"}
-
-    return get_sp(ds[0], specimen_id)
-
-
-####################################################################################################
-@app.get("/v1/specimen_image/{dataset_id}/{specimen_id}",
-         summary='Get an image of the specimen shape, with the given dataset_id and specimen_id',
-         response_description='An image of the specimen shape',
-         tags=['v1'],
-         response_class=Response,
-         responses={200: {'content': {'image/png': {}}}})
-async def get_specimen_image(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
-                             specimen_id: Annotated[str, fPath(description='The specimen ID')]):
-
-    ds = get_ds(dataset_id)
-    if ds:
-        s = get_sp(ds[0], specimen_id)
-        if s:
-            img = plot_specimen(s[0], dataset_id=ds[0]['dataset_id'], stream=True, dpi=200)
-            return Response(img, media_type="image/png")
-
-#============================================================================
-# An alternative way to access the specimens, without using datasets
-# These are all under the /v2 path
-
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
-class SpecimenQuery_v2(BaseModel):
+class SpecimenQuery_v2(BaseModel):  # noqa
     species: str | None = Field(None, title='Species', description="The scientific species name")
     id: str | None = Field(None, title='Specimen ID', description="The specimen ID")
     dataset_id: str | None = Field(None, title='Dataset ID', description="The dataset ID")
@@ -225,44 +100,31 @@ class SpecimenQuery_v2(BaseModel):
          summary="Get specimen metadata with optional filtering. Does not return shapes.",
          response_description='A list of specimen metadata',
          tags=['v2'])
-async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):
+async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
         # Return all specimens if no query parameters are given
         if not query.model_fields_set:
-            return df_flat.to_dict(orient='records')
+            return df.loc[:, df.columns != 'shapes'].to_dict(orient='records')
 
         # Buuld a DataFrame query string from the query parameters
         # attr is a tuple of (query_parameter, value)
         q = [f"{attr[0]} == '{attr[1]}'" for attr in query if attr[1] is not None]
 
-        return df_flat.query(' & '.join(q)).to_dict(orient='records')
-
-
-# @app.get("/v2/specimen/{id}/data",
-#          summary='Get specimen data with the given id',
-#          response_description='A specimen dataset (metadata and shape)',
-#          tags=['v2'])
-# async def get_specimen_data_v2(id: Annotated[str, fPath(description='The specimen ID')]):
-
-#     s = get_sp_from_id(id)
-#     if not s:
-#         return {"message": "Specimen not found"}
-
-#     return s[0]['shapes']
+        return df.query(' & '.join(q)).loc[:, df.columns != 'shapes'].to_dict(orient='records')
 
 
 ####################################################################################################
-@app.get("/v2/specimen/{id}/shape",
-         summary='Get specimen shape with the given id',
-         response_description='A specimen shape structured as per the echoSMs data '
+@app.get("/v2/specimen/{id}/data",
+         summary='Get all specimen data with the given id',
+         response_description='Specimen data structured as per the echoSMs data '
                               f'store [schema]({schema_url})',
          tags=['v2'])
-async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specimen ID')]):
+async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
 
-    s = get_sp_from_id(id)
+    s = specimen(id)
     if not s:
         return {"message": "Specimen not found"}
 
-    return s[0]['shapes']
+    return s
 
 
 ####################################################################################################
@@ -272,13 +134,18 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
          tags=['v2'],
          response_class=Response,
          responses={200: {'content': {'image/png': {}}}})
-async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):
+async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
 
-    s = get_sp_from_id(id)
-    if not s:
-        return {"message": "Specimen not found"}
+    # Use existing image if there is one
+    if (datasets_dir/id).with_suffix('.png').exists():
+        img = 1  # load for streaming via Response
+    else:
+        s = specimen(id)
+        if not s:
+            return {"message": "Specimen not found"}
 
-    img = plot_specimen(s[0], title=id, stream=True, dpi=200)
+        img = plot_specimen(s, title=id, stream=True, dpi=200)
+
     return Response(img, media_type="image/png")
 
 
@@ -287,39 +154,32 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
          summary='Date of most recent datastore contents update',
          response_description='The date when the datastore contents were last updated',
          tags=['v2'])
-async def last_updated():
+async def last_updated():  # noqa
 
     # Using the most recent date from the datasets might not work that well - it relies
     # on that field in the datasets being updated. Consider maintaining a separate
     # last updated time, independent of individual datasets.
-    return max(df_flat.date_last_modified)
+    return max(df.date_last_modified)
 
 
 #============================================================================
 # Helper functions
 
-def get_ds(dataset_id):
-    """Find datasets with given dataset_id."""
-    return [ds for ds in all_datasets if ds['dataset_id'] == dataset_id]
-
-
-def get_sp(ds, specimen_id):
-    """Find specimen with given specimen_id in the given dataset."""
-    return [s for s in ds['specimens'] if s['specimen_id'] == specimen_id]
-
-def get_sp_from_id(id):
-    """Find specimen with given id in the flattened dataframe."""
-    s = df_flat.query(f"id == '{id}'")
+def specimen(sid):
+    """Find specimen with given id, reading the shape from file if needed."""
+    s = df.query(f"id == '{sid}'")
 
     if s.empty:
         return None
 
-    ds = get_ds(s['dataset_id'].iloc[0])
+    sp = s.to_dict(orient='records')[0]
 
-    if not ds:
-        return None
+    # If the shape is not in memory (because it is large), load it
+    if isinstance(sp['shapes'], str):
+        with open(datasets_dir/sp['shapes'], 'r') as f:
+            sp['shapes'] = json.load(f)  # this can be slow - move to streaming it?
 
-    return get_sp(ds[0], s['specimen_id'].iloc[0])
+    return sp
 
 def get_dir_items(base_path: Path):
     """Create an iterable of file/directory info for use by stream-zip."""
