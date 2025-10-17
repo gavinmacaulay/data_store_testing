@@ -146,6 +146,28 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
 
     return Response(plot_specimen(s, title=id, stream=True, dpi=200), media_type="image/png")
 
+####################################################################################################
+# @app.get("/v2/dataset/{dataset_id}",
+#          summary='Get the dataset with the given dataset_id',
+#          response_description='A dataset structured as per the echoSMs data store '
+#                               f'[schema]({schema_url})',
+#          tags=['v2'])
+# async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
+#                       full_data: Annotated[bool, Query(description='If true, all raw data for the '
+#                                     'dataset will be returned as a zipped file')] = False):
+
+#     ds = get_ds(dataset_id)
+#     if not ds:
+#         return {"message": "Dataset not found"}
+
+#     if full_data:
+#         return {"message": "Not available on this testing server"}
+#         # zip up the dataset and stream out
+#         return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_id)),
+#                                  media_type='application/zip',
+#                                  headers={'Content-Disposition':
+#                                           f'attachment; filename={dataset_id}.zip'})
+#     return ds[0]
 
 ####################################################################################################
 @app.get("/v2/last-updated",
