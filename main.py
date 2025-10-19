@@ -1,7 +1,7 @@
 """Proof of concept of echoSMs anatomical data store RESTful API using FastAPI."""
 
 from fastapi import FastAPI, Query, HTTPException, Path as fPath
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response, FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import numpy as np
 from typing import Annotated
@@ -10,7 +10,7 @@ import json
 import pandas as pd
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
-from stream_zip import ZIP_64
+from stream_zip import ZIP_64, stream_zip
 from echosms import plot_specimen
 from urllib.request import urlretrieve
 from zipfile import ZipFile
@@ -147,27 +147,22 @@ async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specim
     return Response(plot_specimen(s, title=id, stream=True, dpi=200), media_type="image/png")
 
 ####################################################################################################
-# @app.get("/v2/dataset/{dataset_id}",
-#          summary='Get the dataset with the given dataset_id',
-#          response_description='A dataset structured as per the echoSMs data store '
-#                               f'[schema]({schema_url})',
-#          tags=['v2'])
-# async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')], # noqa
-#                       full_data: Annotated[bool, Query(description='If true, all raw data for the '
-#                                     'dataset will be returned as a zipped file')] = False):
+@app.get("/v2/dataset/{dataset_id}/all",
+         summary='Get all data with the given dataset_id, including any raw data',
+         response_description='A zipped file containing all data for the dataset',
+         tags=['v2'])
+async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')]):  # noqa
 
-#     ds = get_ds(dataset_id)
-#     if not ds:
-#         return {"message": "Dataset not found"}
+    return {"message": "Not yet implemented"}
 
-#     if full_data:
-#         return {"message": "Not available on this testing server"}
-#         # zip up the dataset and stream out
-#         return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_id)),
-#                                  media_type='application/zip',
-#                                  headers={'Content-Disposition':
-#                                           f'attachment; filename={dataset_id}.zip'})
-#     return ds[0]
+    # The plan: zip up all files in the directory with the same name as the given
+    # dataset_id. If such a directory doesn't exist, raise HTTPException
+
+    # zip up the dataset and stream out
+    return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_id)),
+                             media_type='application/zip',
+                             headers={'Content-Disposition':
+                                      f'attachment; filename={dataset_id}.zip'})
 
 ####################################################################################################
 @app.get("/v2/last-updated",
