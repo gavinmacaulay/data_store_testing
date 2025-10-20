@@ -25,6 +25,8 @@ metadata_filename = 'metadata_all_autogen.json'
 
 datasets_dir = zipfile.with_suffix('')
 
+favicon_path = 'favicon.ico'
+
 # If woring on a DigitalOcean droplet, set to download datastore from URL, else
 # expect the data to be available in a local directory
 from_url = True if os.getenv('HOME') == '/workspace' else False
@@ -179,6 +181,11 @@ async def last_updated():  # noqa
     # last updated time, independent of individual datasets.
     return max(df.date_last_modified)
 
+
+####################################################################################################
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():  # noqa
+    return FileResponse(favicon_path)
 
 #============================================================================
 # Helper functions
