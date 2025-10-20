@@ -134,17 +134,18 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
          responses={200: {'content': {'image/png': {}}}})
 async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
 
-    # Use existing image if there is one
-    if (datasets_dir/id).with_suffix('.png').exists():
-        print('Using cached image file')
-        return FileResponse((datasets_dir/id).with_suffix('.png'))
+    image_file = (datasets_dir/id).with_suffix('.png')
 
-    s = specimen(id)
+    if not image_file.exists():
+        s = specimen(id)
+        if not s:
+            raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
 
-    if not s:
-        raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
+        print('Making and caching the image')
+        plot_specimen(s, title=id, savefile=image_file, dpi=200)
 
-    return Response(plot_specimen(s, title=id, stream=True, dpi=200), media_type="image/png")
+    return FileResponse(image_file)
+
 
 ####################################################################################################
 @app.get("/v2/dataset/{dataset_id}/all",
