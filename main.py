@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 import numpy as np
 from typing import Annotated
 from pathlib import Path
-import json
+import orjson
 import pandas as pd
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
@@ -44,8 +44,10 @@ if from_url:
     zipfile.unlink()
 
 print('Loading datastore from local files')
-with open(datasets_dir/metadata_filename, 'r') as f:
-    all_datasets = json.load(f)
+with open(datasets_dir/metadata_filename, 'rb') as f:
+    json_bytes = f.read()
+    all_datasets = orjson.loads(json_bytes)
+
 
 ####################################################################################################
 # now prepare the data for use via the API
@@ -193,7 +195,8 @@ def specimen(sid):
     # If the shape is not in df (because it is large), load it
     if isinstance(sp['shapes'], str):
         with open(datasets_dir/sp['shapes'], 'r') as f:
-            sp['shapes'] = json.load(f)  # this can be slow - move to streaming it?
+            json_bytes = f.read()  # loads it all into memory
+            sp['shapes'] = orjson.loads(json_bytes)
 
     return sp
 

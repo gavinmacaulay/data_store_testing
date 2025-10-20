@@ -5,3 +5,4 @@ pandas
 stream-zip
 pydantic
 echosms
+orjson
