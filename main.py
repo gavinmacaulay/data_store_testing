@@ -15,6 +15,7 @@ from echosms import plot_specimen
 from urllib.request import urlretrieve
 from zipfile import ZipFile
 import os
+import shutil
 
 
 cdn_url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
@@ -36,12 +37,16 @@ from_url = True if os.getenv('HOME') == '/workspace' else False
 
 """Obtain the datastore and load into memory."""
 if from_url:
+    print('Deleting old local datastore (if present)')
+    zipfile.unlink(missing_ok=True)
+    shutil.rmtree(datasets_dir, ignore_errors=True)
+    
     print('Downloading datastore data')
     urlretrieve(cdn_url + str(zipfile), filename=zipfile)
 
     print('Uncompressing datastore data')
     with ZipFile(zipfile, 'r') as zip_object:
-        zip_object.extractall('.')
+        zip_object.extractall(datasets_dir)
 
     zipfile.unlink()
 
