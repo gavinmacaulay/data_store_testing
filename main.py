@@ -40,7 +40,7 @@ if from_url:
     print('Deleting old local datastore (if present)')
     zipfile.unlink(missing_ok=True)
     shutil.rmtree(datasets_dir, ignore_errors=True)
-    
+
     print('Downloading datastore data')
     urlretrieve(cdn_url + str(zipfile), filename=zipfile)
 
