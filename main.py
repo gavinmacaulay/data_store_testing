@@ -26,7 +26,7 @@ metadata_filename = 'metadata_all_autogen.json'
 
 datasets_dir = zipfile.with_suffix('')
 
-favicon_path = 'favicon.ico'
+favicon_path = 'echoSMs_logo_black.svg'
 
 # If woring on a DigitalOcean droplet, set to download datastore from URL, else
 # expect the data to be available in a local directory
@@ -190,7 +190,7 @@ async def last_updated():  # noqa
 ####################################################################################################
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():  # noqa
-    return FileResponse(favicon_path)
+    return FileResponse(favicon_path, media_type="image/svg+xml")
 
 #============================================================================
 # Helper functions
