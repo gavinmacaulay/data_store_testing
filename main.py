@@ -26,7 +26,7 @@ metadata_filename = 'metadata_all_autogen.json'
 
 datasets_dir = zipfile.with_suffix('')
 
-favicon_path = 'echoSMs_logo_black.svg'
+favicon_path = 'echoSMs_logo_auto_colour.svg'
 
 # If woring on a DigitalOcean droplet, set to download datastore from URL, else
 # expect the data to be available in a local directory
