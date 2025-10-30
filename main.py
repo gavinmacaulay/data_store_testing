@@ -143,7 +143,7 @@ async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specim
          responses={200: {'content': {'image/png': {}}}})
 async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
 
-    image_file = (datasets_dir/id).with_suffix('.png')
+    image_file = Path(f'{datasets_dir/id}.png')
 
     if not image_file.exists():
         s = specimen(id)
