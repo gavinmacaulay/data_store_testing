@@ -79,8 +79,6 @@ class SpecimenQuery_v2(BaseModel):  # noqa
     id: str | None = Field(None, title='Specimen ID', description="The specimen ID")
     dataset_id: str | None = Field(None, title='Dataset ID', description="The dataset ID")
     length_type: str | None = Field(None, title='Length type', description="The length type")
-    anatomical_category: str | None = Field(None, title='Anatomical category',
-                                           description="The anatomical category")
     family: str | None = Field(None, title='Family', description="The scientific family name")
     genus: str | None = Field(None, title='Genus', description="The scientific genus name")
     verncaular_name: str | None = Field(None, title='Vernacular name', description="The common name")
@@ -95,8 +93,8 @@ class SpecimenQuery_v2(BaseModel):  # noqa
                                             description="The specimen condition")
     model_type: str | None = Field(None, title='Model type', description="The model type used")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
-    anatomical_category: str | None = Field(None, title='Anatomical category',
-                                           description="The anatomical category")
+    anatomical_types: str | None = Field(None, title='Anatomical type',
+                                           description="The anatomical type of the shape")
     shape_method: str | None = Field(None, title='Shape method', description="The shape method")
     aphiaID: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
@@ -104,7 +102,7 @@ class SpecimenQuery_v2(BaseModel):  # noqa
 
 ####################################################################################################
 @app.get("/v2/specimens",
-         summary="Get specimen metadata with optional filtering. Does not return shapes.",
+         summary="Get specimen metadata with optional filtering. Does not return shape data.",
          response_description='A list of specimen metadata',
          tags=['v2'])
 async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
@@ -112,7 +110,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
         if not query.model_fields_set:
             return df.loc[:, df.columns != 'shapes'].to_dict(orient='records')
 
-        # Buuld a DataFrame query string from the query parameters
+        # Build a DataFrame query string from the query parameters
         # attr is a tuple of (query_parameter, value)
         q = [f"{attr[0]} == '{attr[1]}'" for attr in query if attr[1] is not None]
 
