@@ -76,27 +76,21 @@ app = FastAPI(title='The echoSMs web API',
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
 class SpecimenQuery_v2(BaseModel):  # noqa
     species: str | None = Field(None, title='Species', description="The scientific species name")
-    id: str | None = Field(None, title='Specimen ID', description="The specimen ID")
-    dataset_id: str | None = Field(None, title='Dataset ID', description="The dataset ID")
-    length_type: str | None = Field(None, title='Length type', description="The length type")
+    uuid: str | None = Field(None, title='Specimen UUID', description="The specimen UUID")
+    specimen_name: str | None = Field(None, title='Specimen name', description="The specimen name")
+    dataset_uuid: str | None = Field(None, title='Dataset UUID', description="The dataset UUID")
+    dataset_name: str | None = Field(None, title='Dataset name', description="The dataset name")
     family: str | None = Field(None, title='Family', description="The scientific family name")
     genus: str | None = Field(None, title='Genus', description="The scientific genus name")
-    verncaular_name: str | None = Field(None, title='Vernacular name', description="The common name")
     activity_name: str | None = Field(None, title='Activity name', description="The activity name")
-    sound_speed_method: str | None = Field(None, title='Sound speed method',
-                                          description="The sound speed method")
-    mass_density_method: str | None = Field(None, title='Mass density method',
-                                           description="The mass density method")
     sex: str | None = Field(None, title='Sex of the organism', description='The sex of the organism')
     imaging_method: str | None = Field(None, title='Imaging method', description="The imaging method used")
     specimen_condition: str | None = Field(None, title='Specimen condition',
                                             description="The specimen condition")
     model_type: str | None = Field(None, title='Model type', description="The model type used")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
-    anatomical_types: str | None = Field(None, title='Anatomical type',
-                                           description="The anatomical type of the shape")
     shape_method: str | None = Field(None, title='Shape method', description="The shape method")
-    aphiaID: int | None = Field(None, title='AphiaID',
+    aphia_id: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
 
@@ -118,59 +112,50 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
 
 
 ####################################################################################################
-@app.get("/v2/specimen/{id}/data",
-         summary='Get all specimen data with the given id',
+@app.get("/v2/specimen/{uuid}/data",
+         summary='Get all specimen data with the given UUID',
          response_description='Specimen data structured as per the echoSMs data '
                               f'store [schema]({schema_url})',
          tags=['v2'])
-async def get_specimen_shape_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
+async def get_specimen_shape_v2(uuid: Annotated[str, fPath(description='The specimen UUID')]):  # noqa
 
-    s = specimen(id)
+    s = specimen(uuid)
     if not s:
-        raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
+        raise HTTPException(status_code=404, detail=f'Specimen {uuid} not found')
 
     return s
 
 
 ####################################################################################################
-@app.get("/v2/specimen/{id}/image",
-         summary='Get an image of the specimen shape with the given id',
+@app.get("/v2/specimen/{uuid}/image",
+         summary='Get an image of the specimen shape with the given uuid',
          response_description='An image of the specimen shape',
          tags=['v2'],
          response_class=Response,
          responses={200: {'content': {'image/png': {}}}})
-async def get_specimen_image_v2(id: Annotated[str, fPath(description='The specimen ID')]):  # noqa
+async def get_specimen_image_v2(uuid: Annotated[str, fPath(description='The specimen UUID')]):  # noqa
 
-    image_file = Path(f'{datasets_dir/id}.png')
-
-    if not image_file.exists():
-        s = specimen(id)
-        if not s:
-            raise HTTPException(status_code=404, detail=f'Specimen {id} not found')
-
-        print('Making and caching the image')
-        plot_specimen(s, title=id, savefile=image_file, dpi=200)
-
+    image_file = Path(f'{datasets_dir/uuid}.png')
     return FileResponse(image_file)
 
 
 ####################################################################################################
-@app.get("/v2/dataset/{dataset_id}/all",
-         summary='Get all data with the given dataset_id, including any raw data',
+@app.get("/v2/dataset/{dataset_uuid}/all",
+         summary='Get all data with the given dataset_uuid, including any raw data',
          response_description='A zipped file containing all data for the dataset',
          tags=['v2'])
-async def get_dataset(dataset_id: Annotated[str, fPath(description='The dataset ID')]):  # noqa
+async def get_dataset(dataset_uuid: Annotated[str, fPath(description='The dataset UUID')]):  # noqa
 
     return {"message": "Not yet implemented"}
 
     # The plan: zip up all files in the directory with the same name as the given
-    # dataset_id. If such a directory doesn't exist, raise HTTPException
+    # dataset_uuid. If such a directory doesn't exist, raise HTTPException
 
     # zip up the dataset and stream out
-    return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_id)),
+    return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_uuid)),
                              media_type='application/zip',
                              headers={'Content-Disposition':
-                                      f'attachment; filename={dataset_id}.zip'})
+                                      f'attachment; filename={dataset_uuid}.zip'})
 
 ####################################################################################################
 @app.get("/v2/last-updated",
@@ -194,8 +179,8 @@ async def favicon():  # noqa
 # Helper functions
 
 def specimen(sid):
-    """Find specimen with given id, reading the shape from file if needed."""
-    s = df.query(f"id == '{sid}'")
+    """Find specimen with given uuid, reading the shape from file if needed."""
+    s = df.query(f"uuid == '{sid}'")
 
     if s.empty:
         return None
