@@ -11,7 +11,6 @@ import pandas as pd
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
-from echosms import plot_specimen
 from urllib.request import urlretrieve
 from zipfile import ZipFile
 import os
