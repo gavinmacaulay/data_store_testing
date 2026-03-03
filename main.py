@@ -208,7 +208,8 @@ def specimen(sid):
     s = s[0]
 
     # If the shape is not in all_datasets (because it is large), load it
-    if ref_key := 'large_shape_ref' in s:
+    ref_key = 'large_shape_ref'
+    if ref_key in s:
         if isinstance(s[ref_key], str):
             with open(datasets_dir/s[ref_key], 'r') as f:
                 json_bytes = f.read()  # loads it all into memory
