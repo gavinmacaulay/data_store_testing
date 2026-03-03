@@ -130,9 +130,18 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
             # A normal top level attribute
             q.append(f"{attr[0]} == '{attr[1]}'")
             
-        print(q)
+        specimens = jmespath.search('[?' + ' && '.join(q) + ']', all_datasets)
 
-        return jmespath.search('[?' + ' && '.join(q) + ']', all_datasets)
+        # remove shape data except for some of the metadata
+        for sp in specimens:
+            s_metadata = []
+            for s in sp['shapes']:
+                ss = {k: v for k, v in s.items()
+                        if k in ['anatomical_feature', 'name', 'boundary']}
+                s_metadata.append(ss)
+            sp['shapes'] = s_metadata
+
+        return sp
 
 
 ####################################################################################################
@@ -199,8 +208,6 @@ def specimen(sid):
     s = s[0]
 
     # If the shape is not in all_datasets (because it is large), load it
-    
-
     if ref_key := 'large_shape_ref' in s:
         if isinstance(s[ref_key], str):
             with open(datasets_dir/s[ref_key], 'r') as f:
