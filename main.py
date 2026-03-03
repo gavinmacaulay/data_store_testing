@@ -199,13 +199,14 @@ def specimen(sid):
     s = s[0]
 
     # If the shape is not in all_datasets (because it is large), load it
-    ref_key = 'large_shape_ref'
+    
 
-    if isinstance(s[ref_key], str):
-        with open(datasets_dir/s[ref_key], 'r') as f:
-            json_bytes = f.read()  # loads it all into memory
-            s['shapes'] = orjson.loads(json_bytes)
-        del s[ref_key]
+    if ref_key := 'large_shape_ref' in s:
+        if isinstance(s[ref_key], str):
+            with open(datasets_dir/s[ref_key], 'r') as f:
+                json_bytes = f.read()  # loads it all into memory
+                s['shapes'] = orjson.loads(json_bytes)
+            del s[ref_key]
 
     return s
 
