@@ -7,6 +7,7 @@ from typing import Annotated
 from pathlib import Path
 import orjson
 import jmespath
+import copy
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
@@ -106,7 +107,7 @@ array = ['version_investigators', 'vernacular_names']
 async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
         # Return all specimens if no query parameters are given
         if not query.model_fields_set:
-            return all_datasets
+            return remove_shape_data(all_datasets)
 
         # Build a jmespath query string from the query parameters
         q = []
@@ -132,16 +133,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
             
         specimens = jmespath.search('[?' + ' && '.join(q) + ']', all_datasets)
 
-        # remove shape data except for some of the metadata
-        for sp in specimens:
-            s_metadata = []
-            for s in sp['shapes']:
-                ss = {k: v for k, v in s.items()
-                        if k in ['anatomical_feature', 'name', 'boundary']}
-                s_metadata.append(ss)
-            sp['shapes'] = s_metadata
-
-        return specimens
+        return remove_shape_data(specimens)
 
 
 ####################################################################################################
@@ -205,7 +197,7 @@ def specimen(sid):
     if not s:
         return None
 
-    s = s[0]
+    s = copy.deepcopy(s[0])
 
     # If the shape is not in all_datasets (because it is large), load it
     ref_key = 'large_shape_ref'
@@ -217,6 +209,27 @@ def specimen(sid):
             del s[ref_key]
 
     return s
+
+def remove_shape_data(specimens):
+    """Remove all shape data except for some metadata.
+
+    Also remove the large_shape_ref item if present.
+    
+    Returns a modified copy of the input dict.
+    """
+    sps_copy = copy.deepcopy(specimens)
+    for sp in sps_copy:
+        s_metadata = []
+        for s in sp['shapes']:
+            ss = {k: v for k, v in s.items()
+                    if k in ['anatomical_feature', 'name', 'boundary']}
+            s_metadata.append(ss)
+        sp['shapes'] = s_metadata
+
+        if 'large_shape_ref' in sp:
+            del sp['large_shape_ref']
+
+    return sps_copy
 
 def get_dir_items(base_path: Path):
     """Create an iterable of file/directory info for use by stream-zip."""
