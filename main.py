@@ -3,11 +3,10 @@
 from fastapi import FastAPI, Query, HTTPException, Path as fPath
 from fastapi.responses import Response, FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
-import numpy as np
 from typing import Annotated
 from pathlib import Path
 import orjson
-import pandas as pd
+import jmespath
 from datetime import datetime as dt
 from stat import S_IFDIR, S_IFREG
 from stream_zip import ZIP_64, stream_zip
@@ -56,20 +55,9 @@ with open(datasets_dir/metadata_filename, 'rb') as f:
 
 
 ####################################################################################################
-# now prepare the data for use via the API
-
-# Replace nan with None - done like this because .fillna(None) doesn't work.
-# None is needed because fastAPI won't serialise np.nan into JSON and the alternative
-# of converting to '' causes problems with using the data later on (one gets
-# columns with a mixture of numbers and text).
-df = pd.DataFrame(all_datasets).fillna(np.nan).replace([np.nan], [None])
-
-del all_datasets
-
-####################################################################################################
 app = FastAPI(title='The echoSMs web API',
               openapi_tags=[{'name': 'v2',
-                             'description': 'Provides data via a flat specimen structure'},])
+                             'description': ''},])
 
 
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
@@ -89,9 +77,26 @@ class SpecimenQuery_v2(BaseModel):  # noqa
     model_type: str | None = Field(None, title='Model type', description="The model type used")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
     shape_method: str | None = Field(None, title='Shape method', description="The shape method")
+    vernacular_names: str | None = Field(None, title='Vernacular name',
+                                         description="A vernacular name")
+    anatomical_category: str | None = Field(None, title='Anatomical category',
+                                            description="The anatomical category")
+    anatomical_feature: str | None = Field(None, title='Anatomical feature', 
+                                description="Specimen contains a shape with this anatomical feature")
+    boundary: str | None = Field(None, title='Shape boundary',
+                                 description="The shape boundary")
+    version_investigators: str | None = Field(None, title='Investigator name',
+                                description="An investigator name")
     aphia_id: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
+# Hacky way to indicate how some attributes should be treated when they are queried for
+nested = {'anatomical_feature': 'shapes',
+          'boundary': 'shapes'}
+
+number = {'aphia_id'}
+
+array = ['version_investigators', 'vernacular_names']
 
 ####################################################################################################
 @app.get("/v2/specimens",
@@ -101,13 +106,33 @@ class SpecimenQuery_v2(BaseModel):  # noqa
 async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
         # Return all specimens if no query parameters are given
         if not query.model_fields_set:
-            return df.loc[:, df.columns != 'shapes'].to_dict(orient='records')
+            return all_datasets
 
-        # Build a DataFrame query string from the query parameters
-        # attr is a tuple of (query_parameter, value)
-        q = [f"{attr[0]} == '{attr[1]}'" for attr in query if attr[1] is not None]
+        # Build a jmespath query string from the query parameters
+        q = []
+        for attr in query:  # attr is a tuple of (query_parameter, value)
+            if attr[1] is None:
+                continue
 
-        return df.query(' & '.join(q)).loc[:, df.columns != 'shapes'].to_dict(orient='records')
+            if attr[0] in array:
+                q.append(f"{attr[0]}[?contains(@, '{attr[1]}')]")
+                continue
+
+            # Can't currently have nested arrays
+            if attr[0] in nested:
+                q.append(f"{nested[attr[0]]}[?{attr[0]} == '{attr[1]}']")
+                continue
+
+            if attr[0] in number:
+                q.append(f"{attr[0]} == `{attr[1]}`")
+                continue
+
+            # A normal top level attribute
+            q.append(f"{attr[0]} == '{attr[1]}'")
+            
+        print(q)
+
+        return jmespath.search('[?' + ' && '.join(q) + ']', all_datasets)
 
 
 ####################################################################################################
@@ -127,7 +152,7 @@ async def get_specimen_shape_v2(uuid: Annotated[str, fPath(description='The spec
 
 ####################################################################################################
 @app.get("/v2/specimen/{uuid}/image",
-         summary='Get an image of the specimen shape with the given uuid',
+         summary='Get an image of the specimen shape with the given UUID',
          response_description='An image of the specimen shape',
          tags=['v2'],
          response_class=Response,
@@ -157,19 +182,6 @@ async def get_dataset(dataset_uuid: Annotated[str, fPath(description='The datase
                                       f'attachment; filename={dataset_uuid}.zip'})
 
 ####################################################################################################
-@app.get("/v2/last-updated",
-         summary='Date of most recent datastore contents update',
-         response_description='The date when the datastore contents were last updated',
-         tags=['v2'])
-async def last_updated():  # noqa
-
-    # Using the most recent date from the datasets might not work that well - it relies
-    # on that field in the datasets being updated. Consider maintaining a separate
-    # last updated time, independent of individual datasets.
-    return max(df.date_last_modified)
-
-
-####################################################################################################
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():  # noqa
     return FileResponse(favicon_path, media_type="image/svg+xml")
@@ -179,20 +191,23 @@ async def favicon():  # noqa
 
 def specimen(sid):
     """Find specimen with given uuid, reading the shape from file if needed."""
-    s = df.query(f"uuid == '{sid}'")
+    s = jmespath.search(f"[?uuid == '{sid}']", all_datasets)
 
-    if s.empty:
+    if not s:
         return None
 
-    sp = s.to_dict(orient='records')[0]
+    s = s[0]
 
-    # If the shape is not in df (because it is large), load it
-    if isinstance(sp['shapes'], str):
-        with open(datasets_dir/sp['shapes'], 'r') as f:
+    # If the shape is not in all_datasets (because it is large), load it
+    ref_key = 'large_shape_ref'
+
+    if isinstance(s[ref_key], str):
+        with open(datasets_dir/s[ref_key], 'r') as f:
             json_bytes = f.read()  # loads it all into memory
-            sp['shapes'] = orjson.loads(json_bytes)
+            s['shapes'] = orjson.loads(json_bytes)
+        del s[ref_key]
 
-    return sp
+    return s
 
 def get_dir_items(base_path: Path):
     """Create an iterable of file/directory info for use by stream-zip."""
