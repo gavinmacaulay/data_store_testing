@@ -141,7 +141,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
                 s_metadata.append(ss)
             sp['shapes'] = s_metadata
 
-        return sp
+        return specimens
 
 
 ####################################################################################################
