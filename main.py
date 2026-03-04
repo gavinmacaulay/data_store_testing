@@ -62,6 +62,18 @@ app = FastAPI(title='The echoSMs web API',
 
 
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
+
+# The 'model_style' parameter is used to indicate how to form the jmespath query for that
+# attribute. Valid values are:
+# - not present - the query will look for a simple attribute=value in the metadata
+# - ('array',) - the query will treat the attribute as an array and try to match against any string
+#                item in the array
+# - ('nested', 'group_name') - the query will look for the attribute under 'group_name' and 
+#                              do a simple attribute=value string search in the metadata
+# 
+# Currently, the nested only does a string search and doesn't support arrays or numbers in nested
+# attributes.
+
 class SpecimenQuery_v2(BaseModel):  # noqa
     species: str | None = Field(None, title='Species', description="The scientific species name")
     uuid: str | None = Field(None, title='Specimen UUID', description="The specimen UUID")
@@ -79,25 +91,22 @@ class SpecimenQuery_v2(BaseModel):  # noqa
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
     shape_method: str | None = Field(None, title='Shape method', description="The shape method")
     vernacular_names: str | None = Field(None, title='Vernacular name',
-                                         description="A vernacular name")
+                                         description="A vernacular name",
+                                         query_style=('array',))
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                             description="The anatomical category")
     anatomical_feature: str | None = Field(None, title='Anatomical feature', 
-                                description="Specimen contains a shape with this anatomical feature")
+                                description="Specimen contains a shape with this anatomical feature",
+                                query_style=('nested', 'shapes'))
     boundary: str | None = Field(None, title='Shape boundary',
-                                 description="The shape boundary")
+                                 description="The shape boundary",
+                                 query_style=('nested', 'shapes'))
     version_investigators: str | None = Field(None, title='Investigator name',
-                                description="An investigator name")
+                                description="An investigator name",
+                                query_style=('array',))
     aphia_id: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
-# Hacky way to indicate how some attributes should be treated when they are queried for
-nested = {'anatomical_feature': 'shapes',
-          'boundary': 'shapes'}
-
-number = {'aphia_id'}
-
-array = ['version_investigators', 'vernacular_names']
 
 ####################################################################################################
 @app.get("/v2/specimens",
@@ -111,25 +120,27 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
 
         # Build a jmespath query string from the query parameters
         q = []
-        for attr in query:  # attr is a tuple of (query_parameter, value)
-            if attr[1] is None:
+        for (attr_name, value) in query:
+            if value is None:
                 continue
 
-            if attr[0] in array:
-                q.append(f"{attr[0]}[?contains(@, '{attr[1]}')]")
-                continue
-
-            # Can't currently have nested arrays
-            if attr[0] in nested:
-                q.append(f"{nested[attr[0]]}[?{attr[0]} == '{attr[1]}']")
-                continue
-
-            if attr[0] in number:
-                q.append(f"{attr[0]} == `{attr[1]}`")
-                continue
-
-            # A normal top level attribute
-            q.append(f"{attr[0]} == '{attr[1]}'")
+            # the 'query_style' parameter in the query definition ends up as a dict on the
+            # json_schema_extra attribute
+            if s := query.model_fields[attr_name].json_schema_extra:
+                query_style = s['query_style']
+            else:
+                query_style = (None,)
+            
+            match query_style[0]:
+                case 'array':
+                    q.append(f"{attr_name}[?contains(@, '{value}')]")
+                case 'nested':
+                    q.append(f"{query_style[1]}[?{attr_name} == '{value}']")
+                case _:  # A normal top level attribute
+                    if isinstance(value, int) or isinstance(value, float):
+                        q.append(f"{attr_name} == `{value}`")
+                    else:
+                        q.append(f"{attr_name} == '{value}'")
             
         specimens = jmespath.search('[?' + ' && '.join(q) + ']', all_datasets)
 
