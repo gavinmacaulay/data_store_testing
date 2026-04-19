@@ -148,11 +148,13 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
 
 
 ####################################################################################################
-@app.get("/v2/specimen/{uuid}/data",
-         summary='Get all specimen data with the given UUID',
-         response_description='Specimen data structured as per the echoSMs data '
-                              f'store [schema]({schema_url})',
-         tags=['v2'])
+settings_data = {
+    'summary': 'Get all specimen data with the given UUID',
+    'response_description': 'Specimen data structured as per the echoSMs data '
+    f'store [schema]({schema_url})',
+    'tags': ['v2']}
+@app.get("/v2/specimen/{uuid}/data", deprecated=True, **settings_data)
+@app.get("/v2/specimens/{uuid}/data", **settings_data)
 async def get_specimen_shape_v2(uuid: Annotated[str, fPath(description='The specimen UUID')]):  # noqa
 
     s = specimen(uuid)
@@ -163,12 +165,14 @@ async def get_specimen_shape_v2(uuid: Annotated[str, fPath(description='The spec
 
 
 ####################################################################################################
-@app.get("/v2/specimen/{uuid}/image",
-         summary='Get an image of the specimen shape with the given UUID',
-         response_description='An image of the specimen shape',
-         tags=['v2'],
-         response_class=Response,
-         responses={200: {'content': {'image/png': {}}}})
+settings_image = {
+    'summary': 'Get an image of the specimen shape with the given UUID',
+    'response_description': 'An image of the specimen shape',
+    'tags': ['v2'],
+    'response_class': Response,
+    'responses': {200: {'content': {'image/png': {}}}}}
+@app.get("/v2/specimen/{uuid}/image", deprecated=True, **settings_image)
+@app.get("/v2/specimens/{uuid}/image", **settings_image)
 async def get_specimen_image_v2(uuid: Annotated[str, fPath(description='The specimen UUID')]):  # noqa
 
     image_file = Path(f'{datasets_dir/uuid}.png')
