@@ -63,7 +63,7 @@ app = FastAPI(title='The echoSMs web API',
 
 # /v2/specimens endpoint query parameter definitions via a Pydantic model
 
-# The 'model_style' parameter is used to indicate how to form the jmespath query for that
+# The 'query_style' parameter is used to indicate how to form the jmespath query for that
 # attribute. Valid values are:
 # - not present - the query will look for a simple attribute=value in the metadata
 # - ('array',) - the query will treat the attribute as an array and try to match against any string
