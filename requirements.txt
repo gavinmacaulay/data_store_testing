@@ -1,6 +1,0 @@
-fastapi[standard]
-stream-zip
-pydantic
-echosms
-orjson
-jmespath
