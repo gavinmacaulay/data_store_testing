@@ -126,7 +126,7 @@ async def get_specimens_v2(query: Annotated[SpecimenQuery_v2, Query()]):  # noqa
 
             # the 'query_style' parameter in the query definition ends up as a dict on the
             # json_schema_extra attribute
-            if s := query.model_fields[attr_name].json_schema_extra:
+            if s := type(query).model_fields[attr_name].json_schema_extra:
                 query_style = s['query_style']
             else:
                 query_style = (None,)
