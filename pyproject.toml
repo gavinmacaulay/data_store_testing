@@ -1,0 +1,12 @@
+[project]
+name = "data-store-testing"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "echosms>=0.20.0",
+    "fastapi[standard]>=0.136.1",
+    "jmespath>=1.1.0",
+    "orjson>=3.11.9",
+    "pydantic>=2.13.4",
+    "stream-zip>=0.0.84",
+]
