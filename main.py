@@ -20,7 +20,7 @@ import shutil
 cdn_url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/datastore_schema/'
 
-zipfile = Path('echosms_datastore_final.zip')
+zipfile = Path('echosms_datastore_upload.zip')
 metadata_filename = 'metadata_all_autogen.json'
 
 datasets_dir = zipfile.with_suffix('')
