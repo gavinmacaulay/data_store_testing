@@ -28,28 +28,25 @@ datasets_dir = zipfile.with_suffix('')
 favicon_path = 'echoSMs_logo_auto_colour.svg'
 
 # If woring on a DigitalOcean droplet, set to download datastore from URL, else
-# expect the data to be available in a local directory
+# expect the datastore data to be available in a local directory
 from_url = True if os.getenv('HOME') == '/workspace' else False
 
 # Note. This initialising code gets run twice sometimes - this needs to be fixed by using
 # FastAPI lifespan events.
 
-"""Obtain the datastore and load into memory."""
-if from_url:
-    print('Deleting old local datastore (if present)')
-    zipfile.unlink(missing_ok=True)
-    shutil.rmtree(datasets_dir, ignore_errors=True)
+print('Deleting old local datastore data if present')
+shutil.rmtree(datasets_dir, ignore_errors=True)
 
+if from_url:
     print('Downloading datastore data')
+    zipfile.unlink(missing_ok=True)
     urlretrieve(cdn_url + str(zipfile), filename=zipfile)
 
-    print('Uncompressing datastore data')
-    with ZipFile(zipfile, 'r') as zip_object:
-        zip_object.extractall(datasets_dir)
+print('Uncompressing datastore data')
+with ZipFile(zipfile, 'r') as zip_object:
+    zip_object.extractall(datasets_dir)
 
-    zipfile.unlink()
-
-print('Loading datastore from local files')
+print('Loading datastore into memory')
 with open(datasets_dir/metadata_filename, 'rb') as f:
     json_bytes = f.read()
     all_datasets = orjson.loads(json_bytes)
