@@ -156,7 +156,7 @@ async def get_specimen_shape_v2(uuid: Annotated[str, fPath(description='The spec
 
     s = specimen(uuid)
     if not s:
-        raise HTTPException(status_code=404, detail=f'Specimen {uuid} not found')
+        raise HTTPException(status_code=404, detail=f'Specimen with uuid of {uuid} was not found')
 
     return s
 
@@ -173,6 +173,9 @@ settings_image = {
 async def get_specimen_image_v2(uuid: Annotated[str, fPath(description='The specimen UUID')]):  # noqa
 
     image_file = Path(f'{datasets_dir/uuid}.png')
+    if not image_file.is_file():
+        raise HTTPException(status_code=404, detail=f'Specimen with uuid of {uuid} was not found')
+
     return FileResponse(image_file)
 
 
