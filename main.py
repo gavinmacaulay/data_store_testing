@@ -73,6 +73,7 @@ app = FastAPI(title='The echoSMs web API',
 
 class SpecimenQuery_v2(BaseModel):  # noqa
     species: str | None = Field(None, title='Species', description="The scientific species name")
+    license: str | None = Field(None, title='license', description="The license that this data is made available under")
     uuid: str | None = Field(None, title='Specimen UUID', description="The specimen UUID")
     specimen_name: str | None = Field(None, title='Specimen name', description="The specimen name")
     dataset_uuid: str | None = Field(None, title='Dataset UUID', description="The dataset UUID")
