@@ -85,23 +85,22 @@ class SpecimenQuery_v2(BaseModel):  # noqa
     imaging_method: str | None = Field(None, title='Imaging method', description="The imaging method used")
     specimen_condition: str | None = Field(None, title='Specimen condition',
                                             description="The specimen condition")
-    model_type: str | None = Field(None, title='Model type', description="The model type used")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
     shape_method: str | None = Field(None, title='Shape method', description="The shape method")
     vernacular_names: str | None = Field(None, title='Vernacular name',
                                          description="A vernacular name",
-                                         query_style=('array',))
+                                         json_schema_extra=('array',))
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                             description="The anatomical category")
     anatomical_feature: str | None = Field(None, title='Anatomical feature', 
                                 description="Specimen contains a shape with this anatomical feature",
-                                query_style=('nested', 'shapes'))
+                                json_schema_extra=('nested', 'shapes'))
     boundary: str | None = Field(None, title='Shape boundary',
                                  description="The shape boundary",
-                                 query_style=('nested', 'shapes'))
+                                 json_schema_extra=('nested', 'shapes'))
     version_investigators: str | None = Field(None, title='Investigator name',
                                 description="An investigator name",
-                                query_style=('array',))
+                                json_schema_extra=('array',))
     aphia_id: int | None = Field(None, title='AphiaID',
                                description='The [aphiaID](https://www.marinespecies.org/aphia.php)')
 
