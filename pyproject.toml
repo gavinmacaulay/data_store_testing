@@ -10,3 +10,9 @@ dependencies = [
     "pydantic>=2.13.4",
     "stream-zip>=0.0.84",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.7.0",
+    "pytest>=9.1.1",
+]
