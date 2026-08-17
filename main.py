@@ -16,6 +16,8 @@ from zipfile import ZipFile
 import os
 import shutil
 
+# Note: when run in 'dev' mode, the auto reload feature can cause this code to be
+# run multiple times. Use the ---no-reload command line option to prevent this.
 
 cdn_url = 'https://echosms-datastore.syd1.cdn.digitaloceanspaces.com/'
 schema_url = 'https://ices-tools-dev.github.io/echoSMs/datastore_schema/'
@@ -31,20 +33,21 @@ favicon_path = 'echoSMs_logo_auto_colour.svg'
 # expect the datastore data to be available in a local directory
 from_url = True if os.getenv('HOME') == '/workspace' else False
 
-# Note. This initialising code gets run twice sometimes - this needs to be fixed by using
-# FastAPI lifespan events.
-
 print('Deleting old local datastore data if present')
 shutil.rmtree(datasets_dir, ignore_errors=True)
 
 if from_url:
-    print('Downloading datastore data')
+    print('Downloading zipped datastore data')
     zipfile.unlink(missing_ok=True)
     urlretrieve(cdn_url + str(zipfile), filename=zipfile)
 
 print('Uncompressing datastore data')
 with ZipFile(zipfile, 'r') as zip_object:
     zip_object.extractall(datasets_dir)
+
+if from_url:
+    print('Deleting zipped downloaded data')
+    zipfile.unlink(missing_ok=True)
 
 print('Loading datastore into memory')
 with open(datasets_dir/metadata_filename, 'rb') as f:
@@ -73,7 +76,11 @@ app = FastAPI(title='The echoSMs web API',
 
 class SpecimenQuery_v2(BaseModel):  # noqa
     species: str | None = Field(None, title='Species', description="The scientific species name")
-    license: str | None = Field(None, title='license', description="The license that this data is made available under")
+    license: str | None = Field(
+        None,
+        title='license',
+        description="The license that this data is made available under"
+        )
     uuid: str | None = Field(None, title='Specimen UUID', description="The specimen UUID")
     specimen_name: str | None = Field(None, title='Specimen name', description="The specimen name")
     dataset_uuid: str | None = Field(None, title='Dataset UUID', description="The dataset UUID")
@@ -81,8 +88,16 @@ class SpecimenQuery_v2(BaseModel):  # noqa
     family: str | None = Field(None, title='Family', description="The scientific family name")
     genus: str | None = Field(None, title='Genus', description="The scientific genus name")
     activity_name: str | None = Field(None, title='Activity name', description="The activity name")
-    sex: str | None = Field(None, title='Sex of the organism', description='The sex of the organism')
-    imaging_method: str | None = Field(None, title='Imaging method', description="The imaging method used")
+    sex: str | None = Field(
+        None,
+        title='Sex of the organism',
+        description='The sex of the organism'
+        )
+    imaging_method: str | None = Field(
+        None,
+        title='Imaging method',
+        description="The imaging method used"
+        )
     specimen_condition: str | None = Field(None, title='Specimen condition',
                                             description="The specimen condition")
     shape_type: str | None = Field(None, title='Shape type', description="The shape type used")
@@ -92,9 +107,12 @@ class SpecimenQuery_v2(BaseModel):  # noqa
                                          json_schema_extra=('array',))
     anatomical_category: str | None = Field(None, title='Anatomical category',
                                             description="The anatomical category")
-    anatomical_feature: str | None = Field(None, title='Anatomical feature', 
-                                description="Specimen contains a shape with this anatomical feature",
-                                json_schema_extra=('nested', 'shapes'))
+    anatomical_feature: str | None = Field(
+        None,
+        title='Anatomical feature', 
+        description="Specimen contains a shape with this anatomical feature",
+        json_schema_extra=('nested', 'shapes')
+        )
     boundary: str | None = Field(None, title='Shape boundary',
                                  description="The shape boundary",
                                  json_schema_extra=('nested', 'shapes'))
@@ -180,22 +198,25 @@ async def get_specimen_image_v2(uuid: Annotated[str, fPath(description='The spec
 
 
 ####################################################################################################
-@app.get("/v2/dataset/{dataset_uuid}/all",
-         summary='Get all data with the given dataset_uuid, including any raw data',
-         response_description='A zipped file containing all data for the dataset',
+@app.get("/v2/raw/{dataset_uuid}/all",
+         summary='Get raw data with the given dataset_uuid (if any).',
+         response_description='A zipped file containing raw data for the dataset (if any)',
          tags=['v2'])
 async def get_dataset(dataset_uuid: Annotated[str, fPath(description='The dataset UUID')]):  # noqa
 
-    return {"message": "Not yet implemented"}
+    if (datasets_dir/dataset_uuid).is_dir():
+        # zip up the dataset and stream out
+        return StreamingResponse(
+            stream_zip(get_dir_items(datasets_dir/dataset_uuid)),
+            media_type='application/zip',
+            headers={'Content-Disposition': f'attachment; filename={dataset_uuid}.zip'}
+            )
 
-    # The plan: zip up all files in the directory with the same name as the given
-    # dataset_uuid. If such a directory doesn't exist, raise HTTPException
+    raise HTTPException(
+        status_code=404,
+        detail=f'No raw data with dataset_uuid of {dataset_uuid} were found.'
+        )
 
-    # zip up the dataset and stream out
-    return StreamingResponse(stream_zip(get_dir_items(datasets_dir/dataset_uuid)),
-                             media_type='application/zip',
-                             headers={'Content-Disposition':
-                                      f'attachment; filename={dataset_uuid}.zip'})
 
 ####################################################################################################
 @app.get("/favicon.ico", include_in_schema=False)
