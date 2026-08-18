@@ -1,0 +1,6 @@
+echosms
+fastapi[standard]
+jmespath
+orjson
+pydantic
+stream-zip
